@@ -1,23 +1,15 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats.kde import gaussian_kde
-from numpy import linspace
-from scipy import stats
 import pandas as pd
 import re
-import os
 import pprint
-
-os.system('cls')
 
 #Passing the content of the .csv file to a Pandas DataFrame
 df = pd.read_csv(r'D:\Dropbox (Personal)\Purdue University\2020_C (Fall Term)\PHYS590 (NMR)\Python Programs\NMR-Nematic-Scaling\NMR_measurements\Raw Recovery Data x=0.05898 11.7T.csv')
 
 #Exctracting the column names of the DataFrame
-list_of_columns = list(df.columns);
+list_of_columns = list(df.columns)
 
 #Exctracting the temperature values from the column names of the DataFrame in an ordered list
-list_of_Temperatures = [];
+list_of_Temperatures = []
 for column_label in list_of_columns:
     pattern = "Co5898_(.*?)K"
     substring = re.search(pattern, column_label).group(1)
@@ -44,3 +36,10 @@ for temperature in list_of_Temperatures:
 #Printing the Magnetization recovery dictionary neatly
 pprint.pprint(Magnetization_recovery_dict)
 
+#Exporting the content of the Magnetization_recovery_dict dictionary to a text file 
+with open('NMR-Nematic-Scaling\Output_Files\Text_files\Magnetization_recovery_pairs_dictionary.txt','w') as data:
+	data.write(str(Magnetization_recovery_dict))
+
+#Presening data in pairs for each temperature value
+# for temperature_value in list_of_Temperatures:
+#     df[Magnetization_recovery_dict[temperature_value]]
