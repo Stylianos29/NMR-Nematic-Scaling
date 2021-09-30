@@ -76,3 +76,4 @@ for temperature_value in Magnetization_recovery_dict.keys():
     ax.set(xlabel='Recovery time (s)', ylabel='Magnetization', title='Magnetization Curves')
 
     plt.savefig('NMR-Nematic-Scaling\Output_Files\Magnetization_Recovery_Curves_x=0.05898_H=11.7T_Curve_LogLinearPlot.png')
+
