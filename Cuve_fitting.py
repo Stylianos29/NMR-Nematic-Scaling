@@ -120,8 +120,8 @@ plt.errorbar(temperature_values, list_of_alpha_values, yerr=list_of_alpha_error,
 # ax1.set_yscale('log')
 # ax1.set_xscale('log')
 
-plt.xlim([-10, 310])
-plt.ylim([-5, 130])
+plt.xlim([-10, 325])
+plt.ylim([-5, 140])
 
 # plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_W1_v_Temperature.png')
 plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_W1_with_beta_values_v_Temperature.png')
