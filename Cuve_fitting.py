@@ -98,7 +98,8 @@ ax1.scatter(np.array(temperature_values), np.array(list_of_alpha_values), s=20, 
 # ax1.scatter(np.array(temperature_values), 1/np.array(list_of_alpha_values), s=20, color='red', marker=".")
 
 ax1.grid()
-ax1.set_title('Stretched exponential $W_1^*$ values Vs. Temperature', pad=15)
+# ax1.set_title('Stretched exponential $W_1^*$ values Vs. Temperature', pad=15)
+ax1.set_title('Stretched exponential $W_1^*$ values (with $\\beta$ values) Vs. Temperature', pad=15)
 # ax1.set_title('Stretched exponential $\\beta$ values Vs. Temperature', pad=15)
 # ax1.set_title('Stretched exponential $T_1^*$ values Vs. Temperature', pad=15)
 
