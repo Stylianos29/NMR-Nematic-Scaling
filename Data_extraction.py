@@ -171,13 +171,16 @@ for NMR_raw_data_file in os.scandir(NMR_raw_data_full_path):
             recovery_magnetization = recovery_magnetization[array_indices[::1]]
 
             # Passing the sorted values to the sorted data dictionary
-            recovery_time_header = "Times at T="+str(temperature_value)
+            recovery_time_header = (
+                NMR_raw_data_header_pairs_per_temperature_dictionary[
+                    temperature_value][0])
             sorted_NMR_magnetization_recovery_data_dictionary[
                                         recovery_time_header] = recovery_time
-            recovery_magnetization_header = "Magnetization at T="+str(
-                                                            temperature_value)
+            sorted_recovery_magnetization_header = (
+                NMR_raw_data_header_pairs_per_temperature_dictionary[
+                    temperature_value][1])
             sorted_NMR_magnetization_recovery_data_dictionary[
-                        recovery_magnetization_header] = recovery_magnetization
+                sorted_recovery_magnetization_header] = recovery_magnetization
 
             # Normalizing the recovery magnetization data using formula
             # m(t) - min / (max - min)
@@ -188,8 +191,11 @@ for NMR_raw_data_file in os.scandir(NMR_raw_data_full_path):
             # Passing the sorted values to the noralized data dictionary
             normalized_NMR_magnetization_recovery_data_dictionary[
                                         recovery_time_header] = recovery_time
+            # normalized_recovery_magnetization_header = (
+            #         "Normalized magnetization at T="+str(temperature_value))
             normalized_recovery_magnetization_header = (
-                    "Normalized magnetization at T="+str(temperature_value))
+                NMR_raw_data_header_pairs_per_temperature_dictionary[
+                    temperature_value][1])
             normalized_NMR_magnetization_recovery_data_dictionary[
                 normalized_recovery_magnetization_header
                 ] = recovery_magnetization
