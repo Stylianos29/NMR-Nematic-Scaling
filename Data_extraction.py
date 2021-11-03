@@ -211,6 +211,7 @@ for NMR_raw_data_file in os.scandir(NMR_raw_data_full_path):
                 "Processed_raw_data_" + raw_data_set_identifier)
         
         if os.path.exists(output_directory_of_input_file_full_path):
+            # This does what? #################################################<--------------
             shutil.rmtree(output_directory_of_input_file_full_path)
         os.makedirs(output_directory_of_input_file_full_path)
         new_directories_counter += 1

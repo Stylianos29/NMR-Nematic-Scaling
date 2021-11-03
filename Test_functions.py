@@ -378,6 +378,7 @@ plot_histogram(W1_histogram_bins, W1_distribution_histogram,
 
 ########################################################################
 # Set up the axes with gridspec
+#TEST!!!!!!!
 fig = plt.figure(figsize=(6, 6))
 grid = plt.GridSpec(4, 4, hspace=0.2, wspace=0.2)
 main_ax = fig.add_subplot(grid[:-1, 1:])
