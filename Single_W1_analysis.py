@@ -1,161 +1,391 @@
+# DESCRIPTION
+# This program creates as output for each input file the following:
+# 1. 
+
+########################################################################
+# DEPENDENCIES
+
 import pandas as pd
 import ast
 import pprint
-
+import shutil
+import os
 from scipy.optimize import curve_fit
-
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 
-#Importing functions for curve fitting
-import importlib.util
-spec = importlib.util.spec_from_file_location("Fitting_functions", "NMR_Nematic_Scaling\Fitting_functions.py")
-fit = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(fit)
+########################################################################
+# FUNCTIONS DEFINITIONS
 
-import matplotlib.font_manager as fm
-import pylab
+# Single W1 exponential recovery function for I=1/2
+def single_W1_recovery_function(x, M0, phi, alpha):
+    return ( M0*(1 - 2*phi*( 0.9*np.exp( -6*alpha*x ) ) -
+                                0.1*np.exp( -alpha*x ) ) )
 
-# Edit the font, font size, and axes width
-# plt.rcParams['font.family'] = 'Avenir'
-# plt.rcParams['font.size'] = 18
-# plt.rcParams['axes.linewidth'] = 2
+def RSS_calculation(magnetization_curve_data, numerical_magnetization_curve):
+    return np.sum(
+        (magnetization_curve_data - numerical_magnetization_curve)**2)
 
-###################################################################################
-#TEMPORARY
+########################################################################
+# LIST DATA SETS
 
-#Passing the content of the .csv file to a Pandas DataFrame
-df = pd.read_csv(r'D:\Dropbox (Personal)\Purdue University\2020_C (Fall Term)\PHYS590 (NMR)\Python Programs\NMR_Nematic_Scaling\NMR_measurements\Raw Recovery Data x=0.05898 11.7T.csv')
+NMR_processed_raw_data_relative_path = os.path.join("NMR_Nematic_Scaling",
+    "Output_Files", "Processed_raw_data")
+# Full paths are specified user-independently as well
+current_working_directory = os.getcwd()
+NMR_processed_raw_data_full_path = os.path.join(
+    current_working_directory, NMR_processed_raw_data_relative_path)
 
-#Importing the content of the Magnetization_recovery_dict dictionary to a text file
-file = open("NMR_Nematic_Scaling\Output_Files\Text_files\Magnetization_recovery_pairs_dictionary.txt", "r")
-contents = file.read()
-Magnetization_recovery_dict = ast.literal_eval(contents)
-file.close()
-#Print statements
-pprint.pprint(Magnetization_recovery_dict)
+output_directory_identifier_list = []
+for NMR_processed_raw_data_dir in os.scandir(NMR_processed_raw_data_full_path):
+    if (NMR_processed_raw_data_dir.is_dir()):
+        identifying_parameters_tuple = tuple(
+            [float(number) for number in re.findall(r'-?\d+\.?\d*',
+                                            str(NMR_processed_raw_data_dir))])        
+        output_directory_identifier_list.append( "x={}_H={}T".format(
+            identifying_parameters_tuple[0], identifying_parameters_tuple[1]) )
 
-###################################################################################
+output_directory_identifier = output_directory_identifier_list[0]
 
-fit_parameters_values_dict = {}
-fit_parameters_error_dict = {}
+# *FUTURE TASK*: Loop over all processed data directories
 
-for temperature_value in Magnetization_recovery_dict.keys():
-    x = np.array(df[Magnetization_recovery_dict[temperature_value][0]])
-    x = x[np.logical_not(np.isnan(x))]
-    y = np.array(df[Magnetization_recovery_dict[temperature_value][1]])
-    y = y[np.logical_not(np.isnan(y))]
+########################################################################
+# IMPORT DATA
 
-    #Making sure that all time recovery values are in ascenting order
-    array_indices = x.argsort()
-    x = x[array_indices[::1]]
-    y = y[array_indices[::1]]
+# Paths formed in a platform-independent way
+NMR_processed_data_directory_relative_path = os.path.join(
+    "NMR_Nematic_Scaling", "Output_Files", "Processed_raw_data",
+                            "Processed_raw_data_"+output_directory_identifier)
 
-    #Normalized data
-    y = ( y - min(y) ) / ( max(y) - min(y) )
+# Full paths are specified user-independently as well
+# *FUTURE TASK*: get the full path of script's directory
+current_working_directory = os.getcwd()
+NMR_processed_data_output_directory_full_path = os.path.join(
+        current_working_directory, NMR_processed_data_directory_relative_path)
 
-    print("Saving plot for T="+str(temperature_value))
+# Importing the sorted magnetization recovery data to a Pandas DataFrame
+magnetization_recovery_sorted_data = pd.read_csv(
+    os.path.join(NMR_processed_data_output_directory_full_path,
+                        "Sorted_raw_data_"+output_directory_identifier+".csv"))
+
+# Importing the normalized magnetization recovery data to a Pandas DataFrame
+magnetization_recovery_normalized_data = pd.read_csv(
+    os.path.join(NMR_processed_data_output_directory_full_path,
+                    "Normalized_raw_data_"+output_directory_identifier+".csv"))
+
+# Importing the Magnetization recovery dictionary to a text file
+magnetization_pairs_dictionary_full_path = os.path.join(
+    NMR_processed_data_output_directory_full_path,
+        "Recovery_magnetization-time_pairs_"+
+            "per_temperature_dictionary_"+output_directory_identifier+".txt")
+
+magnetization_pairs_dictionary_text_file = open(
+                            magnetization_pairs_dictionary_full_path, "r")
+
+# Evaluating the text file content as a dictionary
+magnetization_pairs_dictionary = ast.literal_eval(
+                            magnetization_pairs_dictionary_text_file.read())
+
+magnetization_pairs_dictionary_text_file.close()
+pprint.pprint(magnetization_pairs_dictionary)
+
+########################################################################
+# EXPORT DATA
+
+fit_parameters_for_sorted_data_dictionary = {}
+
+fit_parameters_for_normalized_data_dictionary = {}
+
+output_directory_relative_path = os.path.join("NMR_Nematic_Scaling",
+                                        "Output_Files", "Single_W1_Analysis")
+
+output_directory_full_path = os.path.join(current_working_directory,
+        output_directory_relative_path, "Data_set_"+output_directory_identifier)
+
+# Deleting any existing directories
+if os.path.exists(output_directory_full_path):
+    shutil.rmtree(output_directory_full_path)
+
+# Making a new directory
+os.makedirs(output_directory_full_path)
+
+output_directory_full_path_sorted_plots = os.path.join(
+        output_directory_full_path, 'Fits_LogLinear_Plots')
+
+if os.path.exists(output_directory_full_path_sorted_plots):
+    shutil.rmtree(output_directory_full_path_sorted_plots)
+
+os.makedirs(output_directory_full_path_sorted_plots)
+
+output_directory_full_path_normalized_plots = os.path.join(
+        output_directory_full_path, 'Fits_LogLinear_Plots_normalized')
+
+if os.path.exists(output_directory_full_path_normalized_plots):
+    shutil.rmtree(output_directory_full_path_normalized_plots)
+
+os.makedirs(output_directory_full_path_normalized_plots)
+
+########################################################################
+# FITTING DATA
+
+
+for temperature_value in magnetization_pairs_dictionary.keys():
+
+    temperature_value = float(temperature_value)
+
+    # Exctract the recovery times measurements without any 'nan' values
+    recovery_times = np.array(magnetization_recovery_normalized_data[
+                        magnetization_pairs_dictionary[temperature_value][0]])
+
+    recovery_times = recovery_times[np.logical_not(np.isnan( recovery_times ))]
+
+    # Exctract sorted recovery magnetization data excluding 'nan' values
+    sorted_magnetization_curve = np.array(
+                    magnetization_recovery_sorted_data[
+                        magnetization_pairs_dictionary[temperature_value][1]])
+
+    sorted_magnetization_curve = sorted_magnetization_curve[
+                        np.logical_not(np.isnan(sorted_magnetization_curve))]
+
+    # Exctract normalized recovery magnetization data excluding 'nan' values
+    normalized_magnetization_curve = np.array(
+        magnetization_recovery_normalized_data[magnetization_pairs_dictionary[
+                                                        temperature_value][1]])
+
+    normalized_magnetization_curve = normalized_magnetization_curve[
+                    np.logical_not(np.isnan(normalized_magnetization_curve))]
+
+    # Curve fitting a stretched exponential expresion on both sets of data
+    fit_parameters_for_sorted_data, covariant_matrix_for_sorted_data = (
+        curve_fit( single_W1_recovery_function, xdata = recovery_times,
+                    ydata = sorted_magnetization_curve,
+                        p0=[max(sorted_magnetization_curve), 0.6, 120],
+                            bounds=(-np.inf, np.inf)))
+
+    standard_deviation_values_for_sorted_data = np.sqrt(np.diag(abs(
+                                            covariant_matrix_for_sorted_data)))
+
+    fit_parameters_for_normalized_data, covariant_matrix_for_normalized_data =(
+        curve_fit( single_W1_recovery_function, xdata = recovery_times,
+            ydata = normalized_magnetization_curve, p0=[1, 0.5, 120],
+                bounds=(-np.inf, np.inf)))
+
+    standard_deviation_values_for_normalized_data = np.sqrt(np.diag(abs(
+                                        covariant_matrix_for_normalized_data)))
+
+    # Calculating the RSS estimate for both sets of data
+    RSS_for_sorted_data = RSS_calculation(sorted_magnetization_curve,
+        single_W1_recovery_function(recovery_times,
+            *fit_parameters_for_sorted_data))
+
+    RSS_for_normalized_data = RSS_calculation(normalized_magnetization_curve,
+        single_W1_recovery_function(recovery_times,
+            *fit_parameters_for_normalized_data))
+
+    # numpy.vstack() will return an array of shape (2,3) and .T the tranpose
+    fit_parameters_for_sorted_data_dictionary[temperature_value] = np.vstack(
+        (fit_parameters_for_sorted_data,
+                                standard_deviation_values_for_sorted_data)).T
+
+    fit_parameters_for_normalized_data_dictionary[temperature_value] = (
+        np.vstack((fit_parameters_for_normalized_data,
+                            standard_deviation_values_for_normalized_data)).T)
+
+    # Saving plots with best fit line and parameter estimates with errors
+    # sorted data sets
     fig, ax = plt.subplots()
-    ax.scatter(x, y, s=20, color='black', label='Data')
+    ax.scatter(recovery_times, sorted_magnetization_curve, s=20,
+                                                color='black', label='Data')
+    ax.plot(recovery_times, single_W1_recovery_function(recovery_times,
+        *fit_parameters_for_sorted_data), linestyle=':', linewidth=2,
+            color='red')
+    ax.set(xlabel='Recovery time (s)',
+            ylabel='Recovery magnetization (arb. units)',
+                title='Single W1 fit on recovery '+
+                    'magnetization data at T = '+str(temperature_value)+'K')
     ax.set_xscale('log')
-    
-    # Raw data
-    # pars, cov = curve_fit(f=fit.stretched_recovery_function, xdata=x, ydata=y, p0=[max(y), 1-min(y)/(2*max(y)), 50, 0.5], bounds=(-np.inf, np.inf))
-    # Normalized data
-    pars, cov = curve_fit(f=fit.stretched_recovery_function, xdata=x, ydata=y, p0=[1, 0.5, 50, 0.5], bounds=(-np.inf, np.inf))
-    
-    # Standard deviation error for all the parameters
-    stdevs = np.sqrt(np.diag(abs(cov)))
-    res = np.sum((y - fit.stretched_recovery_function(x, *pars))**2)
+    plt.legend(['Fit curve' + ' (RSS={:.2e}'.format(RSS_for_sorted_data)+')'
+        +'\n- $W_1$={:.2f}'.format(fit_parameters_for_sorted_data[2])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_sorted_data[2])
+        +' ($Hz$)'
+        +',\n- $M_0$={:.2f}'.format(fit_parameters_for_sorted_data[0])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_sorted_data[0])
+        +',\n- $\phi$={:.2f}'.format(fit_parameters_for_sorted_data[1])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_sorted_data[1]),
+            'NMR data'], loc= 'upper left')
+    plot_filename = ('Magnetization_Recovery_Curve_T='+str(temperature_value)
+            +'K_'+output_directory_identifier+'_Curve_LogLinearPlot.png')
+    plt.savefig(os.path.join(output_directory_full_path_sorted_plots,
+        plot_filename))
 
-    ax.plot(x, fit.stretched_recovery_function(x, *pars), linestyle=':', linewidth=2, color='red')#, label="fit"+str(list(pars))
-    # ax.set(xlabel='Recovery time (s)', ylabel='Magnetization Curve', title='Stretched Exponential fit on Magnetization Curve at T = '+str(temperature_value)+'K',xscale = "log")
-    ax.set(xlabel='Recovery time (s)', ylabel='Normalized Magnetization Curve', title='Stretched Exponential fit on Magnetization Curve at T = '+str(temperature_value)+'K',xscale = "log")
+    # normalized data sets
+    fig, ax = plt.subplots()
+    ax.scatter(recovery_times, normalized_magnetization_curve, s=20,
+                                                color='black', label='Data')
+    ax.plot(recovery_times, single_W1_recovery_function(recovery_times,
+        *fit_parameters_for_normalized_data), linestyle=':', linewidth=2,
+            color='red')
+    ax.set(xlabel='Recovery time (s)', ylabel='Normalized recovery '+
+            'magnetization (arb. units)',
+            title='Single W1 fit on recovery magnetization data'+
+                'at T = '+str(temperature_value)+'K')
+    ax.set_xscale('log')
+    plt.legend(['Fit curve' + ' (RSS={:.3f}'.format(RSS_for_normalized_data)
+        +')'+'\n- $W_1$={:.2f}'.format(fit_parameters_for_normalized_data[2])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_normalized_data[2])
+        +' ($Hz$)'
+        +',\n- $M_0$={:.2f}'.format(fit_parameters_for_normalized_data[0])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_normalized_data[0])
+        +',\n- $\phi$={:.2f}'.format(fit_parameters_for_normalized_data[1])
+        +'$\pm${:.2f}'.format(standard_deviation_values_for_normalized_data[1])
+            ,'NMR data'], loc="upper left")
+    plot_filename = ('Magnetization_Recovery_Curve_T='+str(temperature_value)
+            +'K_'+output_directory_identifier+'_Curve_LogLinearPlot.png')
+    plt.savefig(os.path.join(output_directory_full_path_normalized_plots,
+        plot_filename))
 
-    plt.legend(['Fit:'+' $W1^*$={:.2f}'.format(pars[2])+'$\pm${:.2f}'.format(stdevs[2])+' ($1/s$), β={:.2f}'.format(pars[3])+'$\pm${:.2f}'.format(stdevs[3])+',\n $M_0$={:.2f}'.format(pars[0])+', $\phi$={:.2f}'.format(pars[1])+", RSS={:.2e}".format(res), 'NMR data'], loc="upper left")
-    # plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Fits_LogLinear_Plots\Magnetization_Recovery_Curve_T='+str(temperature_value)+'K_x=0.05898_H=11.7T_Curve_LogLinearPlot.png')
-    # Save normalized data
-    # plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Fits_LogLinear_Plots_Normalized\Magnetization_Recovery_Curve_T='+str(temperature_value)+'K_x=0.05898_H=11.7T_Curve_LogLinearPlot.png')
+###############################################################################
+# EXPORTING PARAMETER VALUES
 
-    fit_parameters_values_dict[temperature_value] = pars
-    fit_parameters_error_dict[temperature_value] = stdevs
+# Exporting the sorted recovery pairs dictionary to a text file
+fit_parameters_for_sorted_data_dictionary_filename = (
+    "Fit_parameters_for_sorted_data_dictionary_"
+        +output_directory_identifier+".txt")
 
-pprint.pprint(fit_parameters_values_dict)
+fit_parameters_for_sorted_data_dictionary_full_path = os.path.join(
+    output_directory_full_path,
+        fit_parameters_for_sorted_data_dictionary_filename)
 
-import matplotlib.cm as cm
-###################################################################################
+with open(fit_parameters_for_sorted_data_dictionary_full_path,'w') as data:
+    data.write(str(fit_parameters_for_sorted_data_dictionary))
 
-list_of_alpha_values = [ fit_parameters_values_dict[j][2] for j in list(fit_parameters_values_dict.keys()) ]
-list_of_alpha_error = [ fit_parameters_error_dict[j][2] for j in list(fit_parameters_error_dict.keys()) ]
-list_of_beta_values = [ fit_parameters_values_dict[j][3] for j in list(fit_parameters_values_dict.keys()) ]
-list_of_beta_error = [ fit_parameters_error_dict[j][3] for j in list(fit_parameters_error_dict.keys()) ]
-list_of_phi_values = [ fit_parameters_values_dict[j][1] for j in list(fit_parameters_values_dict.keys()) ]
-list_of_phi_error = [ fit_parameters_error_dict[j][1] for j in list(fit_parameters_error_dict.keys()) ]
-list_of_M0_values = [ fit_parameters_values_dict[j][0] for j in list(fit_parameters_values_dict.keys()) ]
-list_of_M0_error = [ fit_parameters_error_dict[j][0] for j in list(fit_parameters_error_dict.keys()) ]
+# Exporting the normalized recovery pairs dictionary to a text file
+fit_parameters_for_normalized_data_dictionary_filename = (
+    "Fit_parameters_for_normalized_data_dictionary_"
+        +output_directory_identifier+".txt")
 
+fit_parameters_for_normalized_data_dictionary_full_path = os.path.join(
+    output_directory_full_path,
+        fit_parameters_for_normalized_data_dictionary_filename)
 
-temperature_values = list(Magnetization_recovery_dict.keys())
-recovery_times = np.array([1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1])
-colors = cm.rainbow(np.linspace(0, 1, len(recovery_times)))
+with open(fit_parameters_for_normalized_data_dictionary_full_path,'w') as data:
+    data.write(str(fit_parameters_for_normalized_data_dictionary)) 
 
-slope_at_inflection = np.array([0.193161, 0.167753, 0.223586, 0.231432, 0.197833, 0.229112, 0.232296, 0.17893, 0.232366, 0.169364, 0.19182, 0.190065, 0.187226, 0.239567, 0.23781, 0.27536, 0.247891, 0.25687, 0.261396, 0.266929, 0.260024, 0.257597, 0.259894, 0.263925, 0.268179, 0.272231, 0.292903, 0.319857, 0.363608, 0.382399, 0.40175, 0.634582, 0.441697, 0.483477, 0.50374, 0.491276, 0.542637, 0.570584, 0.563728, 0.573509])
+###############################################################################
+# PARAMETER PLOTS
 
-fig1, ax1 = plt.subplots()
+temperature_values = np.array(list(magnetization_pairs_dictionary.keys()))
 
-# ax1.scatter(np.array(temperature_values), np.array(list_of_alpha_values), s=20, color='red', marker=".")
-# ax1.scatter(np.array(temperature_values), np.array(list_of_beta_values), s=20, color='red', marker=".")
-# ax1.scatter(np.array(temperature_values), 1/np.array(list_of_alpha_values), s=20, color='red', marker=".")
-# ax1.scatter(np.array(temperature_values), np.array(list_of_phi_values), s=20, color='red', marker=".")
+fit_parameter_plot_horizontal_axis_label_list = [
+    '$M_0$ values (Hz)',
+    '$\\phi$ values (Hz)',
+    '$W_1$ values (Hz)'
+]
 
-for recovery_time, col in zip(recovery_times, colors):
-    specific_magnetization = [ fit.stretched_recovery_function(recovery_time, *fit_parameters_values_dict[temperature_value]) for temperature_value in temperature_values ]
-    ax1.scatter(np.array(temperature_values), np.array(specific_magnetization), color=col, marker=".")
+fit_parameter_plot_title_list = [
+    'Single W1 analysis $M_0$ values Vs. Temperature',
+    'Single W1 analysis $\\phi$ values Vs. Temperature',
+    'Single W1 analysis $W_1$ values Vs. Temperature'
+]
 
-plt.legend(recovery_times, loc="upper right", title = "Recovery times (s):")
+# Fit parameters for sorted data
+sorted_data_fit_parameter_plot_filename_list = [
+    'Single_W1_analysis_M0_Vs_Temperature.png',
+    'Single_W1_analysis_phi_Vs_Temperature.png',
+    'Single_W1_analysis_W1_Vs_Temperature.png'
+]
 
-ax1.grid()
-# ax1.set_title('Stretched exponential $W_1^*$ values Vs. Temperature', pad=15)
-# ax1.set_title('Stretched exponential $W_1^*$ values (with $\\beta$ values) Vs. Temperature', pad=15)
-# ax1.set_title('Stretched exponential $\\beta$ values Vs. Temperature', pad=15)
-# ax1.set_title('Stretched exponential $T_1^*$ values Vs. Temperature', pad=15)
-# ax1.set_title('Stretched exponential $\phi$ values Vs. Temperature', pad=15)
-# ax1.set_title('Stretched exponential $M_0$ values Vs. Temperature', pad=15)
-ax1.set_title('Stretched exponential $M(t_i)$ values Vs. Temperature', pad=15)
+for fit_parameter_index in range(3):
+    list_of_fit_parameter_values = np.array([
+        fit_parameters_for_sorted_data_dictionary[j][fit_parameter_index][0]
+            for j in list(fit_parameters_for_sorted_data_dictionary.keys()) ])
 
-# ax1.set(xlabel='Temperature (K)', ylabel='$W_1^*$ values (1/s)')
-# ax1.set(xlabel='Temperature (K)', ylabel='$\\beta$ values')
-# ax1.set(xlabel='Temperature (K)', ylabel='$T_1^*$ values (s)')
-# ax1.set(xlabel='Temperature (K)', ylabel='$\phi$ values')
-ax1.set(xlabel='Temperature (K)', ylabel='Normalized $M(t_i)$ values')
+    list_of_fit_parameter_error_values = np.array([
+        fit_parameters_for_sorted_data_dictionary[j][fit_parameter_index][1]
+            for j in list(fit_parameters_for_sorted_data_dictionary.keys()) ])
 
-# for i, txt in enumerate(list_of_beta_values):
-#     plt.annotate(txt, (temperature_values[i], list_of_alpha_values[i]))
+    fig, ax = plt.subplots()
+    ax.scatter(temperature_values, list_of_fit_parameter_values, s=20,
+        color='red', marker=".")
+    plt.errorbar(temperature_values, list_of_fit_parameter_values,
+        yerr=list_of_fit_parameter_error_values, fmt=".", markersize=5,
+            capsize=3, color='red')
+    ax.set_title(fit_parameter_plot_title_list[fit_parameter_index], pad=15)
+    ax.set(xlabel='Temperature (K)',
+        ylabel=fit_parameter_plot_horizontal_axis_label_list[
+            fit_parameter_index])
+    ax.grid()
 
-# Loop for annotation of all points with beta values
-# for i in range(len(temperature_values)):
-#     plt.annotate('{:.2f}'.format(list_of_beta_values[i]), (temperature_values[i], list_of_alpha_values[i] *1.10))
+    plt.savefig(os.path.join(output_directory_full_path,
+        sorted_data_fit_parameter_plot_filename_list[fit_parameter_index]))
 
-# plt.errorbar(temperature_values, list_of_alpha_values, yerr=list_of_alpha_error, fmt=".", markersize=5, capsize=3, color='red')
-# plt.errorbar(temperature_values, list_of_beta_values, yerr=list_of_beta_error, fmt=".", markersize=5, capsize=3, color='red')#fmt=".",
-# plt.errorbar(temperature_values, 1/np.array(list_of_alpha_values), yerr=np.array(list_of_alpha_error)/(np.array(list_of_alpha_values))**2, fmt=".", markersize=5, capsize=3, color='red')
+# Fit parameters for normalized data
+normalized_data_fit_parameter_plot_filename_list = [
+    'Single_W1_analysis_M0_Vs_Temperature_normalized_data.png',
+    'Single_W1_analysis_phi_Vs_Temperature_normalized_data.png',
+    'Single_W1_analysis_W1_Vs_Temperature_normalized_data.png'
+]
 
-# plt.errorbar(temperature_values, list_of_M0_values, yerr=list_of_M0_error, fmt=".", markersize=5, capsize=3, color='red')
+for fit_parameter_index in range(3):
+    list_of_fit_parameter_values = np.array([
+        fit_parameters_for_normalized_data_dictionary[j][
+                fit_parameter_index][0]
+            for j in list(
+                fit_parameters_for_normalized_data_dictionary.keys()) ])
 
-# ax1.set_yscale('log')
-# ax1.set_xscale('log')
+    list_of_fit_parameter_error_values = np.array([
+        fit_parameters_for_normalized_data_dictionary[j][
+                fit_parameter_index][1]
+            for j in list(
+                fit_parameters_for_normalized_data_dictionary.keys()) ])
 
-# plt.xlim([-10, 325])
-# plt.ylim([-5, 140])
+    fig, ax = plt.subplots()
+    ax.scatter(temperature_values, list_of_fit_parameter_values, s=20,
+        color='red', marker=".")
+    plt.errorbar(temperature_values, list_of_fit_parameter_values,
+        yerr=list_of_fit_parameter_error_values, fmt=".", markersize=5,
+            capsize=3, color='red')
+    ax.set_title(fit_parameter_plot_title_list[fit_parameter_index], pad=15)
+    ax.set(xlabel='Temperature (K)',
+        ylabel=fit_parameter_plot_horizontal_axis_label_list[
+            fit_parameter_index])
+    ax.grid()
 
-# plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_W1_v_Temperature.png')
-# plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_W1_with_beta_values_v_Temperature.png')
-# plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_beta_values_v_Temperature_up_to_50K.png')
-# plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_T1_values_v_Temperature.png')
-plt.savefig('NMR_Nematic_Scaling\Output_Files\Stretched_Exponential_Analysis\Stretched_exponential_M_for different_times_v_Temperature.png')
+    plt.savefig(os.path.join(output_directory_full_path,
+        normalized_data_fit_parameter_plot_filename_list[fit_parameter_index]))
+
+###############################################################################
+# SPECIALIZED PARAMETER PLOTS
+
+# T1* values plot
+list_of_T1_star_values = 1/np.array([
+    fit_parameters_for_normalized_data_dictionary[j][2][0]
+        for j in list(fit_parameters_for_normalized_data_dictionary.keys()) ])
+
+list_of_W1_star_error_values = np.array([
+    fit_parameters_for_normalized_data_dictionary[j][2][1]
+        for j in list(fit_parameters_for_normalized_data_dictionary.keys()) ])
+
+list_of_T1_star_error_values = (
+    list_of_W1_star_error_values * (list_of_T1_star_values)**2)
+
+fig, ax = plt.subplots()
+ax.scatter(temperature_values, list_of_T1_star_values, s=20, color='red',
+    marker=".")
+plt.errorbar(temperature_values, list_of_T1_star_values,
+    yerr=list_of_T1_star_error_values, fmt=".", markersize=5, capsize=3,
+        color='red')
+ax.set_title('Single W1 analysis $T_1$ values Vs. '+
+    'Temperature (with $\\beta$ values)', pad=15)
+ax.set(xlabel='Temperature (K)',
+    ylabel='$T_1$ values (s)')
+ax.set_yscale('log')
+ax.grid()
+
+plt.savefig(os.path.join(output_directory_full_path,
+    'Single_W1_analysis_T1_Vs_Temperature_normalized_data.png'))
 
 plt.show()
 
-###################################################################################
-
-fit.stretched_recovery_function( x, *fit_parameters_values_dict[26.0])
+###############################################################################

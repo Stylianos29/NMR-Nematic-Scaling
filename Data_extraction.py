@@ -1,3 +1,4 @@
+# DESCRIPTION:
 # This program creates as output for each input file the following:
 # 1. A recovery pairs dictionary with the temperature values as keys
 # pairing the headers of the recovery magnetization and recovery time 
